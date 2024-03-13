@@ -1,0 +1,226 @@
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(BalloonGame());
+}
+
+class BalloonGame extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('Balloon Popping Game'),
+        ),
+        body: StartGameScreen(),
+      ),
+    );
+  }
+}
+
+class StartGameScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ElevatedButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => BalloonGamePage()),
+          );
+        },
+        child: Text('Start Game', style: TextStyle(fontSize: 24)),
+      ),
+    );
+  }
+}
+
+class Balloon {
+  double x;
+  double y;
+  double radius;
+  Color color;
+  bool popped;
+
+  Balloon({required this.x, required this.y, required this.radius, required this.color})
+      : popped = false;
+}
+
+class BalloonGamePage extends StatefulWidget {
+  @override
+  _BalloonGamePageState createState() => _BalloonGamePageState();
+}
+
+class _BalloonGamePageState extends State<BalloonGamePage> {
+  late List<Balloon> balloons;
+  late Timer moveTimer;
+  late Timer addTimer;
+  int poppedBalloonsCount = 0;
+  int missedBalloonsCount = 0;
+  int gameTimeInSeconds = 60; // Total game time in seconds (2 minutes)
+  bool gameOver = false;
+
+  @override
+  void initState() {
+    super.initState();
+    balloons = [];
+    moveTimer = Timer.periodic(Duration(milliseconds: 30), (Timer t) => moveBalloons());
+    addTimer = Timer.periodic(Duration(seconds: 2), (Timer t) => addBalloon());
+    Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        gameTimeInSeconds--;
+        if (gameTimeInSeconds <= 0) {
+          gameOver = true;
+          moveTimer.cancel();
+          addTimer.cancel();
+        }
+      });
+    });
+  }
+
+  void addBalloon() {
+    final Random random = Random();
+    final double radius = 20 + random.nextDouble() * 30; // Random radius between 20 and 50
+    final double x = random.nextDouble() * (MediaQuery.of(context).size.width - 2 * radius);
+    balloons.add(
+      Balloon(
+        x: x,
+        y: MediaQuery.of(context).size.height - radius * 2, // Start balloons at the bottom of the screen
+        radius: radius,
+        color: Colors.primaries[random.nextInt(Colors.primaries.length)],
+      ),
+    );
+    setState(() {});
+  }
+
+  void moveBalloons() {
+    setState(() {
+      for (int i = 0; i < balloons.length; i++) {
+        balloons[i].y -= 2; // Move the balloons upwards by 2 pixels
+        if (balloons[i].y + balloons[i].radius < 0) {
+          // If the balloon goes above the screen, remove it
+          balloons.removeAt(i);
+          i--; // Adjust the index after removal
+          missedBalloonsCount++;
+        }
+      }
+    });
+  }
+
+  void popBalloon(int index) {
+    setState(() {
+      balloons[index].popped = true;
+      poppedBalloonsCount++;
+    });
+  }
+
+  void restartGame() {
+    setState(() {
+      balloons.clear();
+      poppedBalloonsCount = 0;
+      missedBalloonsCount = 0;
+      gameTimeInSeconds = 60;
+      gameOver = false;
+      moveTimer = Timer.periodic(Duration(milliseconds: 50), (Timer t) => moveBalloons());
+      addTimer = Timer.periodic(Duration(seconds: 1), (Timer t) => addBalloon());
+      Timer.periodic(Duration(seconds: 1), (timer) {
+        setState(() {
+          gameTimeInSeconds--;
+          if (gameTimeInSeconds <= 0) {
+            gameOver = true;
+            moveTimer.cancel();
+            addTimer.cancel();
+          }
+        });
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Balloon Popping Game'),
+      ),
+      body: Center(
+        child: gameOver
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Game Over!', style: TextStyle(fontSize: 24)),
+                  SizedBox(height: 20),
+                  Text('Popped Balloons: $poppedBalloonsCount', style: TextStyle(fontSize: 18)),
+                  SizedBox(height: 10),
+                  Text('Missed Balloons: $missedBalloonsCount', style: TextStyle(fontSize: 18)),
+                  SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () {
+                      restartGame();
+                    },
+                    child: Text('Restart Game', style: TextStyle(fontSize: 20)),
+                  ),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Time: ${Duration(seconds: gameTimeInSeconds).toString().substring(2)}', style: TextStyle(fontSize: 20)),
+                  SizedBox(height: 10),
+                  Text('Popped Balloons: $poppedBalloonsCount', style: TextStyle(fontSize: 18)),
+                  SizedBox(height: 10),
+                  Text('Missed Balloons: $missedBalloonsCount', style: TextStyle(fontSize: 18)),
+                  SizedBox(height: 20),
+                  Expanded(
+                    child: GestureDetector(
+                      onTapDown: (details) {
+                        for (int i = 0; i < balloons.length; i++) {
+                          final double distance = sqrt(pow(details.localPosition.dx - balloons[i].x, 2) + pow(details.localPosition.dy - balloons[i].y, 2));
+                          if (distance < balloons[i].radius && !balloons[i].popped) {
+                            popBalloon(i);
+                            break;
+                          }
+                        }
+                      },
+                      child: Stack(
+                        children: [
+                          Container(
+                            color: Colors.lightBlueAccent,
+                            width: MediaQuery.of(context).size.width,
+                            height: MediaQuery.of(context).size.height,
+                          ),
+                          for (int i = 0; i < balloons.length; i++)
+                            if (!balloons[i].popped)
+                              Positioned(
+                                top: balloons[i].y,
+                                left: balloons[i].x,
+                                child: GestureDetector(
+                                  onTap: () => popBalloon(i),
+                                  child: Container(
+                                    width: balloons[i].radius * 2,
+                                    height: balloons[i].radius * 2,
+                                    decoration: BoxDecoration(
+                                      color: balloons[i].color,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    moveTimer.cancel();
+    addTimer.cancel();
+    super.dispose();
+  }
+}
